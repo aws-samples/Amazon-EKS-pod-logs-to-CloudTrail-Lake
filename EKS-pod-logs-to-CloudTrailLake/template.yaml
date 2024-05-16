@@ -1,0 +1,149 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: |
+  **WARNING** This AWS CloudFormation StackSets template is part of Sample to export EKS Pod log events to CloudTrail Lake. It creates a CloudTrail EventDataStore, CloudTrail Lake Channel, SSM Document, SSM Association, S3 Bucket, IAM Roles and IAM policies required for the Solution. You will be billed for the AWS resources used if you create a stack from this template.
+Parameters:
+  LogImportFrequency:
+    Type: String
+    Default: rate(1 day)
+    AllowedValues:
+      - rate(1 day)
+      - rate(12 hours)
+      - rate(6 hours)
+      - rate(3 hours)
+      - rate(1 hour)
+    Description: Enter Frequency to run import
+  EKSPodNames:
+    Type: String
+    Description: A comma-delimited list of EKS Pod Names where export Pod Logs from.
+    Default: UI,fluent
+  EKSS3LogLocation:
+    Type: String
+    Description: S3 bucket name where exported EKS Pod Logs reside.
+    Default: eks-log-fluent-bit
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 128
+Resources:
+  PodNamesParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /EKS-CloudTrailLake-PodLog-App/PodNamesParameter
+      Type: String
+      Value: !Ref EKSPodNames
+      DataType: text
+      Description: A comma-delimited list of EKS Pod Names to export Pod Logs from.
+      Tier: Standard
+  EKSS3LogLocationParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /EKS-CloudTrailLake-PodLog-App/EKSS3LogLocationParameter
+      Type: String
+      Value: !Sub 's3://${EKSS3LogLocation}/'
+      DataType: text
+      Description: S3 Location where export Pod Logs from.
+      Tier: Standard
+  CTLakeEventDataStore:
+    Type: AWS::CloudTrail::EventDataStore
+    Properties:
+      MultiRegionEnabled: false
+      OrganizationEnabled: false
+      RetentionPeriod: 2557
+      AdvancedEventSelectors:
+        - FieldSelectors:
+            - Field: eventCategory
+              Equals:
+                - ActivityAuditLog
+      TerminationProtectionEnabled: false
+  CTLakeChannel:
+    Type: AWS::CloudTrail::Channel
+    Properties:
+      Source: Custom
+      Destinations:
+        - Type: EVENT_DATA_STORE
+          Location: !Ref CTLakeEventDataStore
+  CloudTrailLakeChannelArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /EKS-CloudTrailLake-PodLog-App/CloudTrailLakeChannelArnParameter
+      Type: String
+      Value: !GetAtt CTLakeChannel.ChannelArn
+      DataType: text
+      Description: CloudTrail Lake Channel Arn.
+      Tier: Standard
+  LogImportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: log_import/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Role: !GetAtt AppFunctionRole.Arn
+  LogImportFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+      LogGroupName: !Sub /aws/lambda/${LogImportFunction}
+  LogImportSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !Ref LogImportFrequency
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt LogImportFunction.Arn
+          Id: LogImportFunction
+      EventBusName: default
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LogImportFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LogImportSchedule.Arn
+  AppFunctionPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Path: /
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cloudtrail-data:PutAuditEvents
+          Resource:
+          - !GetAtt CTLakeChannel.ChannelArn
+        - Effect: Allow
+          Action:
+          - s3:Get*
+          - s3:Put*
+          - s3:List*
+          - s3:Delete*
+          Resource:
+          - !Sub "arn:${AWS::Partition}:s3:::${EKSS3LogLocation}"
+          - !Sub "arn:${AWS::Partition}:s3:::${EKSS3LogLocation}/*"
+        - Effect: Allow
+          Action:
+          - ssm:GetParameter
+          Resource:
+          - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/EKS-CloudTrailLake-PodLog-App/*"
+          - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/EKS-CloudTrailLake-PodLog-App"
+  AppFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+        - !Ref AppFunctionPolicy
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Description: Allows Lambda functions to call AWS services on your behalf.
+Outputs:
+  LogImportFunctionARN:
+    Description: LogImportFunction ARN
+    Value: !GetAtt LogImportFunction.Arn

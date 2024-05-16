@@ -1,4 +1,4 @@
-# Blog Post: cloudops-1529 - How to automate application log ingestion from Amazon EKS on Fargate into AWS CloudTrail Lake
+# How to automate application log ingestion from Amazon EKS on Fargate into AWS CloudTrail Lake
 
 Customers often look for options to capture and centralized storage of application logs from [Amazon Elastic Kubernetes Service on
 Fargate](https://docs.aws.amazon.com/eks/latest/userguide/fargate.html)
@@ -50,7 +50,7 @@ solution. AWS for Fluent Bit will be deployed as a Daemon Set in the
 "s3-exporter" namespace and it will be configured to forward pod logs to
 an S3 Bucket.
 
-![Solution Architecture](images/EKS-CloudTrail Lake.png){width="6.467361111111111in" height="4.610416666666667in"}
+![Solution Architecture](images/EKS-CloudTrail%20Lake.png)
 
 **Steps to deploy sample solution:**
 
@@ -150,7 +150,7 @@ Deploy the sample solution to ingest logs into CloudTrail Lake.
 3.  Download the solution
 
 ```shell
-$ git clone git@ssh.gitlab.aws.dev:cca-ambassadors/Amazon-EKS-pod-logs-to-CloudTrail-Lake.git
+$ git clone https://github.com/aws-samples/Amazon-EKS-pod-logs-to-CloudTrail-Lake.git
 ```
 4.  Build and deploy the solution. Note that, this solution automatically deploys AWS resources required. You will be billed for the AWS resources used by this solution.
 
@@ -211,12 +211,11 @@ scenario.
 
 **Viewing the EKS application logs in CloudTrail Lake**
 
-You can run SQL-based queries against the Pod logs. You can filter on PodNames using the LIKE filter as shown below.
+You can run SQL-based queries against the Pod logs. You can filter on PodNames using the LIKE filter as shown below. You will need to replace the account number the event store id. 
 ```sql
-select * from 615ac055-c81a-4c02-bc3d-455b330c8fa1 where metadata.channelArn = 'arn:aws:cloudtrail:us-west-2:123456768901:channel/e72a18a4-d037-40f4-b298- 4896b65454d1' and eventData.useridentity.type LIKE '%fluent%'
+select * from xxxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxx where metadata.channelArn = 'arn:aws:cloudtrail:us-west-2:123456768901:channel/xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxx' and eventData.useridentity.type LIKE '%fluent%'
 ```
-![Screenshot of CloudTrail Lake query](images/CloudTrail Screenshot.png){width="6.5in" height="3.095833333333333in"}
-
+![Screenshot of CloudTrail Lake query](images/CloudTrail%20Screenshot.png)
 
 **Clean up**
 

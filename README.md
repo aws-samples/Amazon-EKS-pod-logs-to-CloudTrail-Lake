@@ -141,7 +141,7 @@ configured S3 Bucket.
 
 Deploy the sample solution to ingest logs into CloudTrail Lake.
 
-1.  Install the SAM CLI. (The Serverless Application Model Command Line
+1.  [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html). (The Serverless Application Model Command Line
     Interface (SAM CLI) is an extension of the AWS CLI that adds
     functionality for building and testing Lambda applications.)
 
